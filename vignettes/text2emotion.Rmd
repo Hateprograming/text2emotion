@@ -1,0 +1,329 @@
+---
+title: "text2emotion"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{text2emotion}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(text2emotion)
+```
+```
+
+
+## **Introduction**
+
+The `text2emotion` package is designed to to detect and classify emotions from text data. By processing textual input, it identifies emotions such as happiness, sadness, anger, fear, and neutrality. The package leverages advanced techniques like TF-IDF feature extraction and Random Forest classification to accurately predict emotions. Additionally, it associates corresponding emojis with the predicted emotions, providing an engaging way to visualize sentiment in text. This vignette will guide you through the steps of using the package, from preprocessing and model training to emotion prediction and emoji mapping.
+---
+
+## **Installation**
+
+To install the `text2emotion` package, you can use the following command:
+
+```{r}
+install.packages("text2emotion")
+```
+
+---
+
+## **Dependencies**
+
+```{r}
+library(stringr)
+library(textclean)
+library(magrittr)
+library(text2vec)
+library(ranger)
+library(caret)
+library(parallel)
+library(stats)
+```
+
+---
+
+## **Usage Method**
+
+
+
+### Text Preprocessing with `preprocess_text`
+
+The `preprocess_text` function is designed to clean and preprocess raw text data, preparing it for further analysis or modeling. This function includes a variety of stages that handle common text preprocessing tasks such as basic cleaning, contraction expansion, slang handling, and punctuation standardization. Below is a detailed guide on how to use this function and what to consider when applying it to your data.
+
+
+
+#### **Arguments**
+
+- **text**: A character vector of text that needs to be processed.
+
+- **use_textclean**: A logical value (default is `TRUE`). If `TRUE`, the function will replace internet slang and emoticons using the `textclean` package. If `FALSE`, this step will be skipped.
+
+- **custom_slang**: A named list of custom slang replacements. This allows users to specify additional slang terms and their full forms that are not covered by the predefined list. This argument is optional.
+
+
+
+#### **Function Stages**
+
+- **Basic Cleaning**: The function first converts all text to lowercase and replaces HTML entities (such as `&nbsp`;). It also replaces non-ASCII characters with their closest ASCII equivalents (e.g., full-width characters to half-width characters).
+
+- **Contraction Expansion**: Common English contractions like "can't" and "won't" are expanded to their full forms (e.g., "can't" becomes "can not"). The function handles various contractions, with special attention given to negations (e.g., "isn't" becomes "is not").
+
+- **Slang Handling**: The function can replace common internet slang terms with their full forms (e.g., "u" becomes "you"). By default, it uses the `textclean` package to handle internet slang and emoticons, but this step can be disabled by setting `use_textclean = FALSE`. Additionally, you can add your own slang terms via the `custom_slang` argument, allowing for more flexible processing.
+
+- **Final Standardization**: The function standardizes punctuation by normalizing repeated punctuation marks (e.g., "!!!" becomes "!") and ensures consistent spacing around punctuation marks. It also removes any excess whitespace using `stringr::str_squish()`.
+
+
+
+#### **Example Usage**
+
+```{r}
+# Sample text with contractions, slang, and emoticons
+text <- "I'm so excited!! 2nite we go 4 a gg :)"
+
+# Preprocess the text
+cleaned_text <- preprocess_text(text)
+
+# View the processed text
+cleaned_text
+```
+
+In the example above, you can see that:
+
+- Contractions like "I'm" are expanded to "I am".
+
+- "2nite" is converted to "tonight".
+
+- "4" is replaced with "for".
+
+- Emoticons like ":)" remain intact (as defined by `textclean`).
+
+
+
+#### **Custom Slang**
+
+If you have additional slang terms or abbreviations that are not covered by the predefined list, you can pass a `custom_slang` list. Here is an example:
+
+```{r}
+# Define custom slang terms
+custom_slang <- c(
+  "bff" = "best friend forever",
+  "omg" = "oh my god"
+)
+
+# Preprocess the text with custom slang
+text_with_custom_slang <- preprocess_text("omg! My bff is here!", custom_slang = custom_slang)
+
+# View the processed text
+text_with_custom_slang
+```
+
+
+
+#### **Important Notes**
+
+- **Text Size**: This function is designed to handle relatively short pieces of text (e.g., tweets, reviews, messages). If you have a large corpus of text, you may want to apply this function to each document individually for better performance.
+
+- **Internet Slang**: The function handles common internet slang by default, but it may not catch every possible slang term. For more specific needs, consider using the `custom_slang` argument to provide additional replacements.
+
+- **Punctuation Handling**: The function standardizes repeated punctuation marks (e.g., "!!!" becomes "!") but keeps single punctuation marks (e.g., "!" remains as it is). This can help preserve the emotional intensity of the text.
+
+- **Language Support**: Currently, this function is designed for English text. If you're working with other languages, you might need to modify the function or adjust the slang terms accordingly.
+
+
+
+### Predicting Emotion with Emoji Representation
+
+The `predict_emotion_with_emoji()` function allows you to analyze input text and obtain a predicted emotion, its corresponding emoji, or both. It combines preprocessing, TF-IDF feature extraction, and a trained Random Forest classifier to produce interpretable results for sentiment or emotion-aware applications.
+
+
+
+#### **Arguments**
+
+- **text**: A character string. The input text you want to analyze.
+
+- **output_type**: The format of the returned result. Available options:
+
+  - "emotion" – returns the predicted emotion label (e.g., `sad`)
+
+  - "emoji" – returns only the emoji (e.g., 😢)
+
+  - "textemoji" – returns the original text with the emoji appended (default)
+  
+
+  
+#### **Example Usage**
+
+```{r}
+predict_emotion_with_emoji("I'm feeling great today!")
+#> I'm feeling great today! 😊
+
+predict_emotion_with_emoji("He's super angry!!", output_type = "emoji")
+#> 😡
+
+predict_emotion_with_emoji("I feel scared", output_type = "emotion")
+#> fear
+
+```
+  
+
+
+#### **Notes and Considerations**
+
+- The function assumes that the following files exist in your **working directory*:**
+
+  - `trained_rf_ranger_model.rds`
+
+  - `trained_tfidf_model.rds`
+
+  - `trained_vectorizer.rds`
+
+- You can train and save these using your own dataset and pipeline. Refer to the model training section of the package documentation.
+
+- The preprocessing step internally calls `preprocess_text()` to normalize text before feature extraction.
+
+- The emotion classes predicted include:
+
+  - `"positive"`, `"angry"`, `"sad"`, `"fear"`, and `"neutral"`.
+  
+
+---
+
+## **Modeling Workflow**
+
+This vignette describes the development process and core logic behind the modeling pipeline in this package, which maps textual input to emotion categories and ultimately to emojis. The workflow includes text preprocessing, TF-IDF vectorization, model selection, hyperparameter tuning, and final evaluation.
+
+
+
+### **1. Text Preprocessing**
+
+Before modeling, we apply a series of preprocessing techniques to clean and standardize the input texts. This step is essential for improving downstream classification performance. Our preprocessing includes:
+
+- **Lowercasing and tokenization**: All text is converted to lowercase and tokenized into words.
+- **Slang and abbreviation expansion**: We replace informal terms (e.g., "idk" → "I don't know") using a custom slang dictionary.
+- **Negation handling**: Special care is taken to preserve negation cues. If a token like `"not"` precedes a word, we combine them into a new token (e.g., `"not happy"` → `"not_happy"`), ensuring the model learns the distinct semantics of negated expressions.
+- **Stopword filtering**: We use a curated stopword list, but explicitly retain sentiment-related words such as `"not"`, `"never"`, and `"no"`.
+
+The function `handle_negation()` is responsible for applying this rule-based transformation to token sequences.
+
+
+
+### **2. Feature Engineering: TF-IDF Vectorization**
+
+For feature extraction, we utilize Term Frequency-Inverse Document Frequency (TF-IDF) to encode the preprocessed text. The function `train_tfidf_model()` performs this transformation with the following steps:
+
+- **Token filtering**: Uninformative tokens are removed based on our custom stopword list.
+
+- **Support for unigrams and trigrams**: We include both single words and short phrases to better capture emotional context (e.g., `"so happy"` or `"not good"`).
+
+- **Vocabulary pruning**: Low-frequency and overly frequent terms are filtered using `min_df`, `max_df`, and a maximum feature size.
+
+- **Sentiment-priority term boosting**: Words known to carry strong emotional weight (e.g., "happy", "furious", "disappointed") are manually prioritized to ensure they are retained in the final vocabulary.
+
+The resulting sparse TF-IDF matrix is used as input for the classification model.
+
+
+
+### **3. Model Selection and Evaluation**
+
+We experimented with several classification models for sentiment prediction, including:
+
+- **Decision Trees**  
+- **XGBoost**  
+- **Random Forests**  
+
+After extensive evaluation, we found that **Random Forest** consistently outperformed both Decision Trees and XGBoost in terms of test accuracy and macro F1-score. Therefore, we adopted Random Forest as our final model of choice.
+
+
+
+### **4. Hyperparameter Tuning**
+
+We perform a grid search over `mtry` and `ntree` to optimize the Random Forest model using the `tune_rf_model()` function. For each hyperparameter combination, the model is trained and evaluated on the training set, and accuracy is recorded:
+
+  - `mtry` (number of features to consider at each split)
+
+  - `ntree` (number of trees in the forest)
+
+```{r,eval=FALSE}
+best_params <- tune_rf_model(
+    train_matrix = tfidf_result$tfidf_matrix,
+    train_labels = train_labels,
+    mtry_grid = c(5, 10, 20),
+    ntree_grid = c(100, 200, 300),
+    seed = 123,
+    verbose = TRUE
+  )
+```
+
+The best-performing parameter set is chosen based on training accuracy. A caching mechanism is used to store the training dataset and accelerate re-runs.
+
+
+
+#### 5. Final Model Training
+
+With the best hyperparameters obtained, the `train_rf_model()` function fits the final model using the full training data. The trained model is saved to disk as an RDS file for reuse.
+
+```{r,eval=FALSE}
+rf_model <- train_rf_model(
+    train_matrix = tfidf_result$tfidf_matrix,
+    train_labels = train_labels,
+    ntree = best_params$ntree,
+    mtry = best_params$mtry,
+    seed = 123,
+    verbose = TRUE,
+    train_df_cache_path = train_df_cache_path
+  )
+```
+
+
+
+
+### **6. Model Evaluation on Test Data**
+
+To evaluate generalization, we use `evaluate_rf_model()` to assess model performance on held-out test data. The function includes:
+
+- Preprocessing and TF-IDF encoding of test texts
+- Ensuring vocabulary alignment with the training vectorizer
+- Prediction and computation of standard metrics, including:
+  - **Accuracy**
+  - **Confusion Matrix**
+  - **Macro F1-score**
+
+```{r,eval=FALSE}
+eval_result <- evaluate_rf_model(
+    rf_model = rf_model,
+    test_texts = preprocessed_test_texts,
+    test_labels = test_labels,
+    tfidf_model = tfidf_result$tfidf_model,
+    vectorizer = tfidf_result$vectorizer,
+    stopwords = stopwords,
+    verbose = TRUE
+  )
+```
+
+```{r,eval=FALSE}
+eval_result$text_accuracy
+eval_result$macro_f1
+eval_result$confusion
+```
+
+The accuracy of our Random Forest model remains stable above 65% across different runs. This robust evaluation framework allows us to monitor both overall and per-class performance, which is particularly important in imbalanced sentiment datasets.
+
+---
+
+## **Advantages**
+
+The `text2emotion` package offers a streamlined and efficient pipeline for emotion classification from text. It integrates robust text preprocessing techniques, TF-IDF vectorization, and machine learning models to deliver reliable emotion predictions. Unlike many black-box models, our approach is transparent, customizable, and suitable for small to medium-sized datasets. Extensive testing showed that Random Forest consistently outperformed decision trees and XGBoost in our use case, achieving stable accuracy above 65%. Additionally, the package maps emotions to representative emojis, enhancing its utility in applications such as sentiment tagging, chatbot responses, and social media analysis.
+
+---
+
+## **Summary**
+
+In conclusion, this package provides a comprehensive toolset for emotion classification in text, combining powerful preprocessing, feature extraction, and predictive modeling. By using a Random Forest classifier, it achieves stable and reliable performance, especially when compared to other models like XGBoost and Decision Trees. With the added ability to map emotions to emojis, the package offers a unique, user-friendly experience for analyzing and visualizing emotions in text, making it a valuable resource for anyone working in sentiment analysis and NLP.
