@@ -16,6 +16,7 @@ library(text2emotion)
 text <- "I am feeling great today!"
 predict_emotion_with_emoji(text)
 # output: I am feeling great today!😊
+```
 
 This package is useful for sentiment analysis, chatbot response enhancement, social media text analysis, and more.
 
