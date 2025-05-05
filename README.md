@@ -13,7 +13,7 @@ Example usage in R:
 
 library(text2emotion)
 predict_emotion_with_emoji("I'm feeling great today!")
-# Output: I'm feeling great today!😊
+Output: I'm feeling great today!😊
 
 This package is useful for sentiment analysis, chatbot response enhancement, social media text analysis, and more.
 
